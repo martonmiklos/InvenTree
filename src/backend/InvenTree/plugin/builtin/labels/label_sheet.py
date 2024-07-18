@@ -13,6 +13,7 @@ from rest_framework import serializers
 
 import report.helpers
 from InvenTree.helpers import str2bool
+from InvenTree.serializers import DependentField
 from plugin import InvenTreePlugin
 from plugin.mixins import LabelPrintingMixin, SettingsMixin
 from report.models import LabelOutput, LabelTemplate
@@ -28,6 +29,22 @@ class LabelPrintingOptionsSerializer(serializers.Serializer):
         default='A4',
         label=_('Page Size'),
         help_text=_('Page size for the label sheet'),
+    )
+
+    width = DependentField(
+        depends_on=['page_size'],
+        field_serializer='get_width_serializer',
+        default=210,
+        label=_('Width in mm'),
+        help_text=_('Custom page width in mm'),
+    )
+
+    height = DependentField(
+        depends_on=['page_size'],
+        field_serializer='get_height_serializer',
+        default=297,
+        label=_('Height in mm'),
+        help_text=_('Custom page height in mm'),
     )
 
     skip = serializers.IntegerField(
@@ -48,6 +65,21 @@ class LabelPrintingOptionsSerializer(serializers.Serializer):
         label=_('Landscape'),
         help_text=_('Print the label sheet in landscape mode'),
     )
+
+    def get_width_serializer(self, fields):
+        """Custom serializer for the dependent width parameter."""
+        return self.get_custom_pagesize_serializer(fields, 210)
+
+    def get_height_serializer(self, fields):
+        """Custom serializer for the dependent height parameter."""
+        return self.get_custom_pagesize_serializer(fields, 297)
+
+    def get_custom_pagesize_serializer(self, fields, default_value):
+        """Custom serializer for the dependent custom page size parameters."""
+        if fields['page_size'] == 'Custom':
+            return serializers.IntegerField(min_value=1, default=default_value)
+        else:
+            return None
 
 
 class InvenTreeLabelSheetPlugin(LabelPrintingMixin, SettingsMixin, InvenTreePlugin):
@@ -92,7 +124,13 @@ class InvenTreeLabelSheetPlugin(LabelPrintingMixin, SettingsMixin, InvenTreePlug
         skip = int(printing_options.get('skip', 0))
 
         # Extract size of page
-        page_size = report.helpers.page_size(page_size_code)
+        if page_size_code == 'Custom':
+            page_size = (
+                printing_options.get('width', '210'),
+                printing_options.get('height', '297'),
+            )
+        else:
+            page_size = report.helpers.page_size(page_size_code)
         page_width, page_height = page_size
 
         if landscape:

@@ -44,6 +44,7 @@ def report_page_size_options():
         ('A3', _('A3')),
         ('Legal', _('Legal')),
         ('Letter', _('Letter')),
+        ('Custom', _('Custom')),
     ]
 
 
@@ -54,6 +55,7 @@ def page_sizes():
         'A3': (297, 420),
         'Legal': (215.9, 355.6),
         'Letter': (215.9, 279.4),
+        'Custom': (-1, -1),
     }
 
 
