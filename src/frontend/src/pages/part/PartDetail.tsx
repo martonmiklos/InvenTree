@@ -79,6 +79,7 @@ import { UsedInTable } from '../../tables/bom/UsedInTable';
 import { BuildOrderTable } from '../../tables/build/BuildOrderTable';
 import { AttachmentTable } from '../../tables/general/AttachmentTable';
 import { PartParameterTable } from '../../tables/part/PartParameterTable';
+import PartTestResultsTable from '../../tables/part/PartTestResultsTable';
 import PartTestTemplateTable from '../../tables/part/PartTestTemplateTable';
 import { PartVariantTable } from '../../tables/part/PartVariantTable';
 import { RelatedPartTable } from '../../tables/part/RelatedPartTable';
@@ -644,6 +645,17 @@ export default function PartDetail() {
               apiEndpoint: ApiEndpoints.part_test_statistics
             }}
           />
+        ) : (
+          <Skeleton />
+        )
+      },
+      {
+        name: 'test_results',
+        label: t`Test Results`,
+        icon: <IconTestPipe />,
+        hidden: !part.trackable,
+        content: part?.pk ? (
+          <PartTestResultsTable partId={part?.pk} />
         ) : (
           <Skeleton />
         )

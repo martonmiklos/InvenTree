@@ -43,7 +43,7 @@ from InvenTree.mixins import (
 from InvenTree.permissions import RolePermission
 from InvenTree.serializers import EmptySerializer
 from order.status_codes import PurchaseOrderStatusGroups, SalesOrderStatusGroups
-from stock.models import StockLocation
+from stock.models import StockItemTestResult, StockLocation
 
 from . import serializers as part_serializers
 from . import views
@@ -406,6 +406,24 @@ class PartInternalPriceList(DataExportViewMixin, ListCreateAPI):
     ordering = 'quantity'
 
 
+class PartTestResultsFilter(rest_filters.FilterSet):
+    """Custom filterset class for the PartTestTemplateList endpoint."""
+
+    class Meta:
+        """Metaclass options for this filterset."""
+
+        model = StockItemTestResult
+        fields = [
+            'value',
+            'result',
+            'stock_item__serial',
+            'template__test_name',
+            'result',
+            'value',
+            'test_station',
+        ]
+
+
 class PartTestTemplateFilter(rest_filters.FilterSet):
     """Custom filterset class for the PartTestTemplateList endpoint."""
 
@@ -488,6 +506,76 @@ class PartTestTemplateList(PartTestTemplateMixin, DataExportViewMixin, ListCreat
     ]
 
     ordering = 'test_name'
+
+
+class PartTestResultsList(ListAPI):
+    """API endpoint for listing all the test results of a specific part."""
+
+    queryset = StockItemTestResult.objects.all()
+    serializer_class = part_serializers.PartTestResultsSerializer
+
+    def get_queryset(self, *args, **kwargs):
+        """Return an annotated queryset for the PartTestTemplateDetail endpoints."""
+        queryset = super().get_queryset(*args, **kwargs)
+
+        queryset = queryset.only(
+            'result',
+            'value',
+            'stock_item__serial',
+            'template__test_name',
+            'date',
+            'started_datetime',
+            'finished_datetime',
+            'test_station',
+        )
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Serialize the test results belonging to a given part."""
+        queryset = self.filter_queryset(self.get_queryset())
+        data = queryset.filter(stock_item__part=self.kwargs['pk'])
+
+        page = self.paginate_queryset(data)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+        else:
+            serializer = self.get_serializer(data, many=True)
+
+        data = serializer.data
+
+        return Response(data)
+
+    filter_backends = [InvenTreeSearchFilter]
+
+    filterset_class = PartTestResultsFilter
+
+    filter_backends = SEARCH_ORDER_FILTER
+
+    search_fields = [
+        'stock_item__serial',
+        'template__test_name',
+        'value',
+        'result',
+        'date',
+        'started',
+        'finished',
+        'test_station',
+    ]
+
+    ordering_fields = [
+        'result',
+        'value',
+        'stock_item__serial',
+        'template__test_name',
+        'date',
+        'started_datetime',
+        'finished_datetime',
+        'test_station',
+    ]
+
+    ordering = 'date'
 
 
 class PartThumbs(ListAPI):
@@ -2069,6 +2157,15 @@ part_api_urls = [
             path(
                 '', PartTestTemplateList.as_view(), name='api-part-test-template-list'
             ),
+        ]),
+    ),
+    # Base URL for Part's test results API endpoints
+    path(
+        'test-results/',
+        include([
+            path(
+                '<int:pk>/', PartTestResultsList.as_view(), name='api-part-test-results'
+            )
         ]),
     ),
     # Base URL for part sale pricing

@@ -254,6 +254,25 @@ class PartThumbSerializer(serializers.Serializer):
     count = serializers.IntegerField(read_only=True)
 
 
+class PartTestResultsSerializer(InvenTree.serializers.InvenTreeModelSerializer):
+    """Serializer for the test results field of the Part model."""
+
+    class Meta:
+        """Metaclass defining serializer fields."""
+
+        model = stock.models.StockItemTestResult
+        depth = 1
+        fields = [
+            'result',
+            'value',
+            'date',
+            'template',
+            'started_datetime',
+            'finished_datetime',
+            'stock_item',
+        ]
+
+
 class PartThumbSerializerUpdate(InvenTree.serializers.InvenTreeModelSerializer):
     """Serializer for updating Part thumbnail."""
 

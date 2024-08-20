@@ -89,6 +89,7 @@ export enum ApiEndpoints {
   category_parameter_list = 'part/category/parameters/',
   related_part_list = 'part/related/',
   part_test_template_list = 'part/test-template/',
+  part_test_results_list = 'part/test-results/:id/',
 
   // Company API endpoints
   company_list = 'company/',
