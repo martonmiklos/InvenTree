@@ -1844,6 +1844,61 @@ class SchemaPostprocessingTest(TestCase):
         # required key removed when empty
         self.assertNotIn('required', schemas_out.get('SalesOrderShipment'))
 
+    def test_postprocess_multipart_file_fields_binary(self):
+        """Verify multipart upload fields are exposed as binary in the schema."""
+        result_in = self.create_result_structure()
+
+        result_in['components']['schemas']['UploadRequest'] = {
+            'properties': {
+                'image': {'type': 'string', 'format': 'uri', 'nullable': True},
+                'note': {'type': 'string'},
+            }
+        }
+
+        result_in['paths']['/api/test/upload/'] = {
+            'post': {
+                'requestBody': {
+                    'content': {
+                        'multipart/form-data': {
+                            'schema': {'$ref': '#/components/schemas/UploadRequest'}
+                        }
+                    }
+                }
+            }
+        }
+
+        # non-multipart payloads should not be modified
+        result_in['components']['schemas']['NonMultipartRequest'] = {
+            'properties': {
+                'website': {'type': 'string', 'format': 'uri', 'nullable': True},
+            }
+        }
+        result_in['paths']['/api/test/json/'] = {
+            'post': {
+                'requestBody': {
+                    'content': {
+                        'application/json': {
+                            'schema': {
+                                '$ref': '#/components/schemas/NonMultipartRequest'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        result_out = schema.postprocess_multipart_file_fields_binary(
+            result_in, {}, {}, {}
+        )
+        schemas_out = result_out['components']['schemas']
+
+        self.assertEqual(
+            schemas_out['UploadRequest']['properties']['image']['format'], 'binary'
+        )
+        self.assertEqual(
+            schemas_out['NonMultipartRequest']['properties']['website']['format'], 'uri'
+        )
+
 
 class URLCompatibilityTest(InvenTreeTestCase):
     """Unit test for legacy URL compatibility."""
