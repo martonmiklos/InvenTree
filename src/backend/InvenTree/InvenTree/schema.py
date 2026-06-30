@@ -16,6 +16,7 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
+from rest_framework import serializers
 from rest_framework.pagination import LimitOffsetPagination
 
 from InvenTree.permissions import OASTokenMixin
@@ -45,6 +46,20 @@ class ExtendedOAuth2Scheme(DjangoOAuthToolkitScheme):
 
 class ExtendedAutoSchema(AutoSchema):
     """Extend drf-spectacular to allow customizing the schema to match the actual API behavior."""
+
+    def _map_serializer_field(self, field, direction, *args, **kwargs):
+        """Custom field mapping overrides, falling back to default behavior."""
+        schema = super()._map_serializer_field(field, direction, *args, **kwargs)
+
+        direction_value = getattr(direction, 'value', direction)
+
+        # File and image fields in request schemas must be represented as binary
+        # payloads. In response schemas they are still rendered as URLs.
+        if direction_value == 'request' and isinstance(field, serializers.FileField):
+            schema['type'] = 'string'
+            schema['format'] = 'binary'
+
+        return schema
 
     def is_bulk_action(self, ref: str) -> bool:
         """Check the class of the current view for the bulk mixins."""
@@ -242,81 +257,6 @@ def postprocess_required_nullable(result, generator, request, public):
                 required_fields.remove(field)
         if 'required' in schema and len(required_fields) == 0:
             schema.pop('required')
-
-    return result
-
-
-def postprocess_multipart_file_fields_binary(result, generator, request, public):
-    """Map multipart file fields from URI format to binary format.
-
-    drf-spectacular can emit ``type: string, format: uri`` for upload fields.
-    For multipart request payloads this should be represented as ``format: binary``
-    so generated clients treat these fields as file uploads.
-    """
-
-    components = result.get('components', {})
-    component_schemas = components.get('schemas', {})
-    component_request_bodies = components.get('requestBodies', {})
-
-    visited_objects = set()
-    visited_refs = set()
-
-    def _replace_uri_with_binary(schema):
-        if not isinstance(schema, dict):
-            return
-
-        obj_id = id(schema)
-        if obj_id in visited_objects:
-            return
-        visited_objects.add(obj_id)
-
-        if schema.get('type') == 'string' and schema.get('format') == 'uri':
-            schema['format'] = 'binary'
-
-        ref = schema.get('$ref')
-        if isinstance(ref, str) and ref.startswith('#/components/schemas/'):
-            ref_name = ref.split('/')[-1]
-            if ref_name not in visited_refs and ref_name in component_schemas:
-                visited_refs.add(ref_name)
-                _replace_uri_with_binary(component_schemas[ref_name])
-
-        for key in ['allOf', 'anyOf', 'oneOf']:
-            for item in schema.get(key, []):
-                _replace_uri_with_binary(item)
-
-        for prop_schema in schema.get('properties', {}).values():
-            _replace_uri_with_binary(prop_schema)
-
-        _replace_uri_with_binary(schema.get('items'))
-
-    def _process_request_body_content(content):
-        if not isinstance(content, dict):
-            return
-
-        for content_type, content_schema in content.items():
-            if not content_type.startswith('multipart/'):
-                continue
-
-            if not isinstance(content_schema, dict):
-                continue
-
-            _replace_uri_with_binary(content_schema.get('schema'))
-
-    for path_item in result.get('paths', {}).values():
-        if not isinstance(path_item, dict):
-            continue
-
-        for operation in path_item.values():
-            if not isinstance(operation, dict):
-                continue
-
-            request_body = operation.get('requestBody', {})
-
-            if '$ref' in request_body:
-                ref_name = request_body['$ref'].split('/')[-1]
-                request_body = component_request_bodies.get(ref_name, {})
-
-            _process_request_body_content(request_body.get('content', {}))
 
     return result
 

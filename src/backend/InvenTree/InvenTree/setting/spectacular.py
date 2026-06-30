@@ -22,7 +22,6 @@ def get_spectacular_settings():
         'POSTPROCESSING_HOOKS': [
             'InvenTree.schema.postprocess_schema_enums',
             'InvenTree.schema.postprocess_required_nullable',
-            'InvenTree.schema.postprocess_multipart_file_fields_binary',
             'InvenTree.schema.postprocess_print_stats',
         ],
         'ENUM_NAME_OVERRIDES': {
