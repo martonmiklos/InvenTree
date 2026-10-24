@@ -12,6 +12,7 @@ from django.utils.translation import gettext_lazy as _
 import structlog
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.serializers import ValidationError
 from sql_util.utils import SubqueryCount, SubquerySum
 
@@ -42,6 +43,9 @@ from InvenTree.serializers import (
 )
 from InvenTree.tasks import batch_offload_tasks
 from plugin.base.event.events import batch_events
+from plugin.events import trigger_event
+from stock.events import StockEvents
+from users.permissions import check_user_permission
 from users.serializers import UserSerializer
 
 from .models import (
@@ -1421,6 +1425,141 @@ class LocationTreeSerializer(InvenTree.serializers.InvenTreeModelSerializer):
     def annotate_queryset(queryset):
         """Annotate the queryset with the number of sublocations."""
         return queryset.annotate(sublocations=stock.filters.annotate_sub_locations())
+
+
+class LocationSwapSerializer(serializers.Serializer):
+    """Swap the direct sublocations and stock items of two locations."""
+
+    class Meta:
+        """Metaclass options."""
+
+        model = StockLocation
+        fields = ['locations', 'skip_stock']
+
+    locations = serializers.PrimaryKeyRelatedField(
+        queryset=StockLocation.objects.all(),
+        many=True,
+        label=_('Locations'),
+        help_text=_('The two locations whose contents will be swapped'),
+    )
+    skip_stock = serializers.BooleanField(
+        default=False,
+        label=_('Skip Stock Items'),
+        help_text=_('Swap sublocations without moving direct stock items'),
+    )
+
+    def validate(self, data):
+        """Reject swaps which would create a cycle or put stock in a structural location."""
+        locations = data['locations']
+
+        if len(locations) != 2 or locations[0].pk == locations[1].pk:
+            raise ValidationError({'locations': _('Select two different locations')})
+
+        first, second = locations
+
+        # Follow parent links rather than relying on asynchronously rebuilt tree fields.
+        for location, other in [(first, second), (second, first)]:
+            parent = location.parent
+            while parent is not None:
+                if parent.pk == other.pk:
+                    raise ValidationError({
+                        'locations': _(
+                            'Cannot swap a location with one of its descendants'
+                        )
+                    })
+                parent = parent.parent
+
+        if not data.get('skip_stock', False) and any(
+            loc.structural for loc in locations
+        ):
+            raise ValidationError({
+                'skip_stock': _('Items cannot be moved to a structural location')
+            })
+
+        return data
+
+    def save(self):
+        """Swap both sets of contents atomically, preserving stock movement history."""
+        user = self.context['request'].user
+        data = self.validated_data
+        ids = [location.pk for location in data['locations']]
+
+        with (
+            transaction.atomic(),
+            batch_events(),
+            batch_tracking_entries(),
+            batch_offload_tasks(),
+        ):
+            locations = list(
+                StockLocation.objects
+                .select_for_update()
+                .filter(pk__in=ids)
+                .order_by('pk')
+            )
+            # Revalidate after locking, in case a selected location has changed.
+            self.validate({**data, 'locations': locations})
+            first, second = locations
+            destinations = {first.pk: second.pk, second.pk: first.pk}
+
+            if not all(location.check_ownership(user) for location in locations):
+                raise PermissionDenied(_('You do not own the selected locations'))
+
+            if not data['skip_stock'] and not check_user_permission(
+                user, StockItem, 'change'
+            ):
+                raise PermissionDenied()
+
+            children = list(
+                StockLocation.objects
+                .select_for_update()
+                .filter(parent_id__in=ids)
+                .order_by('pk')
+                .values_list('pk', 'parent_id')
+            )
+
+            if not data['skip_stock']:
+                items = (
+                    StockItem.objects
+                    .select_for_update()
+                    .filter(location_id__in=ids)
+                    .order_by('pk')
+                )
+                for item in items:
+                    old_location = item.location_id
+                    item.location_id = destinations[old_location]
+                    item.save(user=user, add_note=False)
+                    item.add_tracking_entry(
+                        stock.status_codes.StockHistoryCode.STOCK_MOVE,
+                        user,
+                        notes=_('Swapped location contents'),
+                        deltas={
+                            'location': item.location_id,
+                            'quantity': float(item.quantity),
+                        },
+                    )
+                    trigger_event(
+                        StockEvents.ITEM_MOVED,
+                        id=item.pk,
+                        old_location=old_location,
+                        new_location=item.location_id,
+                        quantity=item.quantity,
+                    )
+
+            for child_id, parent_id in children:
+                # Each save can update MPTT coordinates of the remaining nodes.
+                child = StockLocation.objects.get(pk=child_id)
+                child.parent = StockLocation.objects.get(pk=destinations[parent_id])
+                child.save()
+
+            tree_ids = set(
+                StockLocation.objects.filter(pk__in=ids).values_list(
+                    'tree_id', flat=True
+                )
+            )
+            StockLocation.rebuild_trees(tree_ids)
+            StockLocation.rebuild_tree_pathstring_values(tree_ids)
+
+        return data
 
 
 class LocationDeleteSerializer(serializers.Serializer):

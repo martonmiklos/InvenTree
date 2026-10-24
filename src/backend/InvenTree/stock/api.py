@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_field
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
+from rest_framework.request import clone_request
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 
@@ -23,6 +24,7 @@ import common.filters
 import common.models
 import common.settings
 import InvenTree.helpers
+import InvenTree.metadata
 import InvenTree.permissions
 import stock.serializers as StockSerializers
 from build.models import Build
@@ -475,6 +477,37 @@ class StockLocationList(
     ordering_fields = ['name', 'pathstring', 'items', 'level', 'tree_id', 'lft']
 
     ordering = ['tree_id', 'lft', 'name']
+
+
+class StockLocationSwapMetadata(InvenTree.metadata.InvenTreeMetadata):
+    """Expose PATCH fields using the PUT metadata expected by API forms."""
+
+    def determine_actions(self, request, view):
+        """Check swap permissions before returning the confirmation form fields."""
+        original_request = view.request
+        view.request = clone_request(request, 'PATCH')
+        try:
+            view.check_permissions(view.request)
+            return {'PUT': self.get_serializer_info(view.get_serializer())}
+        finally:
+            view.request = original_request
+
+
+class StockLocationSwap(GenericAPIView):
+    """Swap contents of two stock locations in a single transaction."""
+
+    queryset = StockLocation.objects.none()
+    serializer_class = StockSerializers.LocationSwapSerializer
+    metadata_class = StockLocationSwapMetadata
+    role_required = 'stock_location.change'
+
+    @extend_schema(responses={200: StockSerializers.LocationSwapSerializer})
+    def patch(self, request, *args, **kwargs):
+        """Exchange direct stock and sublocations, optionally leaving direct stock in place."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class StockLocationDetail(
@@ -1738,6 +1771,7 @@ stock_api_urls = [
         'location/',
         include([
             path('tree/', StockLocationTree.as_view(), name='api-location-tree'),
+            path('swap/', StockLocationSwap.as_view(), name='api-location-swap'),
             # Stock location detail endpoints
             path(
                 '<int:pk>/',

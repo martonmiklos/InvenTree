@@ -140,6 +140,7 @@ export enum ApiEndpoints {
 
   // Stock location endpoints
   stock_location_list = 'stock/location/',
+  stock_location_swap = 'stock/location/swap/',
   stock_location_type_list = 'stock/location-type/',
   stock_location_tree = 'stock/location/tree/',
 

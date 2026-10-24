@@ -1,10 +1,14 @@
 """InvenTree API version information."""
 
 # InvenTree API version
-INVENTREE_API_VERSION = 564
+INVENTREE_API_VERSION = 565
 """Increment this API version number whenever there is a significant change to the API that any clients need to know about."""
 
 INVENTREE_API_TEXT = """
+
+v565 -> 2026-10-24 : https://github.com/inventree/InvenTree/pull/xxxxx
+    - Adds PATCH /api/stock/location/swap/ to atomically swap stock location contents
+    - Supports swapping sublocations without moving direct stock items with "skip_stock"
 
 v564 -> 2026-10-24 : https://github.com/inventree/InvenTree/pull/xxxxx
     - BomItem "can_build", "pricing_min_total" and "pricing_max_total" fields now account for "piece_count"

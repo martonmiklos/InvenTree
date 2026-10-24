@@ -14719,3 +14719,28 @@ msgstr "Read the docs"
 #: src/views/MobileAppView.tsx:42
 msgid "Ignore and continue to Desktop view"
 msgstr "Ignore and continue to Desktop view"
+
+#: src/tables/stock/StockLocationTable.tsx:152
+#: src/tables/stock/StockLocationTable.tsx:190
+msgid "Swap selected locations"
+msgstr "Swap selected locations"
+
+#: src/tables/stock/StockLocationTable.tsx:153
+msgid "Swap without moving parts"
+msgstr "Swap without moving parts"
+
+#: src/tables/stock/StockLocationTable.tsx:153
+msgid "Swap"
+msgstr "Swap"
+
+#: src/tables/stock/StockLocationTable.tsx:154
+msgid "Location contents swapped"
+msgstr "Location contents swapped"
+
+#: src/tables/stock/StockLocationTable.tsx:162
+msgid "Items cannot be moved to a structural location. Do you want to perform the swap without moving parts?"
+msgstr "Items cannot be moved to a structural location. Do you want to perform the swap without moving parts?"
+
+#: src/tables/stock/StockLocationTable.tsx:163
+msgid "Swap the sublocations and stock items of the selected locations?"
+msgstr "Swap the sublocations and stock items of the selected locations?"

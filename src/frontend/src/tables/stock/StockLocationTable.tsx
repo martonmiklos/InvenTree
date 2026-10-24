@@ -1,5 +1,6 @@
 import { t } from '@lingui/core/macro';
-import { Group } from '@mantine/core';
+import { Alert, Group } from '@mantine/core';
+import { IconArrowsExchange } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { AddItemButton } from '@lib/components/AddItemButton';
@@ -21,6 +22,7 @@ import { InvenTreeTable } from '../../components/tables/InvenTreeTable';
 import { useStockLocationFields } from '../../forms/StockForms';
 import { InvenTreeIcon } from '../../functions/icons';
 import {
+  useApiFormModal,
   useBulkEditApiFormModal,
   useCreateApiFormModal,
   useEditApiFormModal
@@ -140,6 +142,30 @@ export function StockLocationTable({ parentId }: Readonly<{ parentId?: any }>) {
     onFormSuccess: table.refreshTable
   });
 
+  const hasStructuralLocation = table.selectedRecords.some(
+    (location) => location.structural
+  );
+
+  const swapLocations = useApiFormModal({
+    url: ApiEndpoints.stock_location_swap,
+    method: 'PATCH',
+    title: t`Swap selected locations`,
+    submitText: hasStructuralLocation ? t`Swap without moving parts` : t`Swap`,
+    successMessage: t`Location contents swapped`,
+    fields: {
+      locations: { hidden: true, value: table.selectedIds },
+      skip_stock: { hidden: true, value: hasStructuralLocation }
+    },
+    preFormContent: (
+      <Alert color={hasStructuralLocation ? 'yellow' : 'blue'}>
+        {hasStructuralLocation
+          ? t`Items cannot be moved to a structural location. Do you want to perform the swap without moving parts?`
+          : t`Swap the sublocations and stock items of the selected locations?`}
+      </Alert>
+    ),
+    onFormSuccess: () => table.refreshTable(true)
+  });
+
   const tableActions = useMemo(() => {
     const can_add = user.hasAddRole(UserRoles.stock_location);
     const can_edit = user.hasChangeRole(UserRoles.stock_location);
@@ -159,6 +185,15 @@ export function StockLocationTable({ parentId }: Readonly<{ parentId?: any }>) {
             onClick: () => {
               setParent.open();
             }
+          },
+          {
+            name: t`Swap selected locations`,
+            icon: <IconArrowsExchange />,
+            hidden:
+              !can_edit ||
+              table.selectedIds.length !== 2 ||
+              (!hasStructuralLocation && !user.hasChangeRole(UserRoles.stock)),
+            onClick: () => swapLocations.open()
           }
         ]}
       />,
@@ -169,7 +204,7 @@ export function StockLocationTable({ parentId }: Readonly<{ parentId?: any }>) {
         hidden={!can_add}
       />
     ];
-  }, [user, table.hasSelectedRecords]);
+  }, [user, table.selectedRecords, hasStructuralLocation, swapLocations.open]);
 
   const rowActions = useCallback(
     (record: any): RowAction[] => {
@@ -193,6 +228,7 @@ export function StockLocationTable({ parentId }: Readonly<{ parentId?: any }>) {
       {newLocation.modal}
       {editLocation.modal}
       {setParent.modal}
+      {swapLocations.modal}
       <InvenTreeTable
         url={apiUrl(ApiEndpoints.stock_location_list)}
         tableState={table}
