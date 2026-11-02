@@ -111,6 +111,22 @@ test('Stock - Location Delete', async ({ browser }) => {
   await page.getByRole('textbox', { name: 'text-field-name' }).fill(loc_2);
   await page.getByRole('button', { name: 'Submit' }).click();
 
+  // An empty leaf location does not need either deletion action
+  await page
+    .getByRole('button', { name: 'action-menu-location-actions' })
+    .first()
+    .click();
+  await page
+    .getByRole('menuitem', { name: 'action-menu-location-actions-delete' })
+    .click();
+  await expect(
+    page.getByRole('combobox', { name: 'choice-field-delete_stock_items' })
+  ).toBeHidden();
+  await expect(
+    page.getByRole('combobox', { name: 'choice-field-delete_sub_locations' })
+  ).toBeHidden();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
   // Navigate up to parent
   await page.getByRole('link', { name: `breadcrumb-2-${loc_1}` }).click();
   await loadTab(page, 'Sublocations');
@@ -125,12 +141,9 @@ test('Stock - Location Delete', async ({ browser }) => {
     .getByRole('menuitem', { name: 'action-menu-location-actions-delete' })
     .click();
 
-  await page
-    .getByRole('combobox', { name: 'choice-field-delete_stock_items' })
-    .click();
-  await page
-    .getByRole('option', { name: 'Move items to parent location' })
-    .click();
+  await expect(
+    page.getByRole('combobox', { name: 'choice-field-delete_stock_items' })
+  ).toBeHidden();
 
   await page
     .getByRole('combobox', { name: 'choice-field-delete_sub_locations' })

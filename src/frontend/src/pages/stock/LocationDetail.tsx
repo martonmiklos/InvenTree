@@ -247,6 +247,8 @@ export default function Stock() {
       delete_stock_items: {
         label: t`Items Action`,
         required: true,
+        hidden: location.items === 0,
+        default: location.items === 0 ? 'false' : undefined,
         description: t`Action for stock items in this location`,
         field_type: 'choice',
         choices: deleteOptions
@@ -254,6 +256,8 @@ export default function Stock() {
       delete_sub_locations: {
         label: t`Location Actions`,
         required: true,
+        hidden: location.sublocations === 0,
+        default: location.sublocations === 0 ? 'false' : undefined,
         description: t`Action for child locations in this location`,
         field_type: 'choice',
         choices: deleteOptions
